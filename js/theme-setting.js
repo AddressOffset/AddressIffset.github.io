@@ -13,10 +13,11 @@ function isNightFun() {
         }
         localStorage.setExpire("night", isNightTemp, expireTime1H);
     }
-    return isNightTemp;
+    return  'false';
 }
 
-var isNight=isNightFun();
+// var isNight=isNightFun();
+var isNight= 'false';
 // 参考自 https://www.imaegoo.com/
 var nightNav;
 var nightIcon;
