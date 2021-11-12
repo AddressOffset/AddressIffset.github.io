@@ -1,127 +1,74 @@
-// 参考自 主题https://github.com/fi3ework/hexo-theme-archer
-let prevHeight = 0
-function initTocLinksScrollTop(tocLinks) {
-  return [...tocLinks].map(link => {
-    return getAbsPosition(link).y
-  })
-}
+(function (window, document) {
+  function register($toc) {
+    const currentInView = new Set();
+    const headingToMenu = new Map();
+    const $menus = Array.from($toc.querySelectorAll('.menu-list > li > a'));
 
-let calcAnchorLink = (heights, currHeight) => {
-  for (let i = 0; i < heights.length; i++) {
-    if (Math.abs(currHeight - heights[i]) < 1.1) {
-      return i
+    for (const $menu of $menus) {
+      const elementId = $menu.getAttribute('href').trim().slice(1);
+      const $heading = document.getElementById(elementId);
+      if ($heading) {
+        headingToMenu.set($heading, $menu);
+      }
     }
-  }
-  return -1
-}
 
-let isPassingThrough = (currHeight, prevHeight, linkHeight) => {
-  return (currHeight + 1 - linkHeight) * (prevHeight + 1 - linkHeight) <= 0
-}
+    const $headings = Array.from(headingToMenu.keys());
 
-function calcScrollIntoScreenIndex(heights, prevHeight, currHeight) {
-  let anchorLinkIndex = calcAnchorLink(heights, currHeight)
-  if (anchorLinkIndex >= 0) {
-    return anchorLinkIndex
-  }
+    const callback = (entries) => {
+      for (const entry of entries) {
+        if (entry.isIntersecting) {
+          currentInView.add(entry.target);
+        } else {
+          currentInView.delete(entry.target);
+        }
+      }
+      let $heading;
+      if (currentInView.size) {
+        // heading is the first in-view heading
+        $heading = [...currentInView].sort(($el1, $el2) => $el1.offsetTop - $el2.offsetTop)[0];
+      } else if ($headings.length) {
+        // heading is the closest heading above the viewport top
+        $heading = $headings
+          .filter(($heading) => $heading.offsetTop < window.scrollY)
+          .sort(($el1, $el2) => $el2.offsetTop - $el1.offsetTop)[0];
+      }
+      if ($heading && headingToMenu.has($heading)) {
+        $menus.forEach(($menu) => $menu.classList.remove('is-active'));
 
-  for (let i = 0; i < heights.length; i++) {
-    if (isPassingThrough(currHeight, prevHeight, heights[i])) {
-      // if is scrolling down, select current
-      if (currHeight > prevHeight) {
-        return i
-      } else {
-        // if is scrolling up, select previous
-        return i - 1
+        const $menu = headingToMenu.get($heading);
+        $menu.classList.add('is-active');
+        let $menuList = $menu.parentElement.parentElement;
+        while (
+          $menuList.classList.contains('menu-list') &&
+          $menuList.parentElement.tagName.toLowerCase() === 'li'
+        ) {
+          $menuList.parentElement.children[0].classList.add('is-active');
+          $menuList = $menuList.parentElement.parentElement;
+        }
+      }
+    };
+    const observer = new IntersectionObserver(callback, { threshold: 0 });
+
+    for (const $heading of $headings) {
+      observer.observe($heading);
+      // smooth scroll to the heading
+      if (headingToMenu.has($heading)) {
+        const $menu = headingToMenu.get($heading);
+        $menu.setAttribute('data-href', $menu.getAttribute('href'));
+        $menu.setAttribute('href', 'javascript:;');
+        $menu.addEventListener('click', () => {
+          if (typeof $heading.scrollIntoView === 'function') {
+            $heading.scrollIntoView({ behavior: 'smooth' });
+          }
+        });
+        $heading.style.scrollMargin = '1em';
       }
     }
   }
-}
 
-// hide all ol
-function hideAllOl(root) {
-  ;[...root.querySelectorAll('ul')].forEach(li => {
-    hideItem(li)
-  })
-}
-
-function showOrHidden(tocs, cur) {
-  var i = 0;
-  tocs.forEach(ul => {
-    if (i > 0) {
-      if (ul.innerText.indexOf(cur.innerText) > -1) {
-        showItem(ul);
-      } else {
-        hideItem(ul);
-      }
-    }
-    i++;
-  })
-}
-
-// back to default state
-function initFold(toc) {
-  ;[...toc.children].forEach(child => {
-    hideAllOl(child)
-  })
-    ;[...toc.querySelectorAll('.is-current')].forEach(child => {
-      child.classList.remove('is-current')
-    })
-}
-
-function resetFold(toc) {
-  initFold(toc)
-}
-
-function hideItem(node) {
-  node.style.display = 'none'
-}
-
-function showItem(node) {
-  node.style.display = ''
-}
-
-function getAbsPosition(e) {
-  let x = e.offsetLeft,
-    y = e.offsetTop
-  while ((e = e.offsetParent)) {
-    x += e.offsetLeft
-    y += e.offsetTop
+  if (typeof window.IntersectionObserver === 'undefined') {
+    return;
   }
-  return {
-    x: x,
-    y: y
-  }
-}
 
-function loadToc() {
-  let toc = document.querySelector('.toc')
-  let tocs = document.querySelectorAll('.toc')
-  let tocItems = document.querySelectorAll('.toc-item')
-  if (!tocItems.length || toc == null) {
-    return
-  }
-  initFold(toc)
-  let headers = document.querySelectorAll(
-    '.article-entry h1, h2, h3, h4, h5, h6'
-  )
-  // get links height
-  let heights = initTocLinksScrollTop(headers)
-  document.addEventListener('scroll', () => {
-    let currHeight = $(document).scrollTop()
-    let currHeightIndex = calcScrollIntoScreenIndex(
-      heights,
-      prevHeight,
-      currHeight
-    )
-    prevHeight = currHeight
-    if (typeof currHeightIndex === 'undefined') {
-      return
-    }
-    let currItem = tocItems[currHeightIndex]
-    if (currItem) {
-      // show or hidden toc
-      showOrHidden(tocs, currItem);
-    }
-  })
-}
+  document.querySelectorAll('#toc').forEach(register);
+})(window, document);
